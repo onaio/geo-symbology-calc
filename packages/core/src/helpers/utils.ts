@@ -13,9 +13,18 @@ import {
 } from './types';
 import * as yup from 'yup';
 import nodeCron from 'node-cron';
-import { dateOfVisitAccessor, priorityLevelAccessor } from '../constants';
+import {
+  dateOfVisitAccessor,
+  facilityOnVisitFormAcccessor,
+  priorityLevelAccessor
+} from '../constants';
 import { OnaApiService } from '../services/onaApi/services';
-import { Result } from './Result';
+import {
+  MISSING_PRIORITY_LEVEL,
+  NO_VISIT_SUBMISSIONS,
+  Result,
+  UNRECOGNIZED_PRIORITY_LEVEL
+} from './Result';
 
 export const createInfoLog = (message: string) => ({ level: LogMessageLevels.INFO, message });
 export const createWarnLog = (message: string) => ({ level: LogMessageLevels.WARN, message });
@@ -37,8 +46,8 @@ const orderSymbologyConfig = (config: SymbologyConfig) => {
   });
 };
 
-export const colorDeciderFactory = (symbolConfig: SymbologyConfig, logger?: LogFn) => {
-  const orderedSymbologyConfig = orderSymbologyConfig(symbolConfig);
+export const colorDeciderFactory = (pipelineConfig: SymbologyConfig, logger?: LogFn) => {
+  const orderedSymbologyConfig = orderSymbologyConfig(pipelineConfig);
 
   const colorDecider = (
     recentVisitDiffToNow: number | typeof Infinity,
@@ -48,12 +57,17 @@ export const colorDeciderFactory = (symbolConfig: SymbologyConfig, logger?: LogF
 
     if (!thisFacilityPriority) {
       logger?.(createWarnLog(`facility _id: ${submission._id} does not have a priority_level`));
-      return;
+      return Result.fail('Missing priority level', MISSING_PRIORITY_LEVEL);
     }
 
     // TODO - risky coupling.
     const symbologyConfigByPriorityLevel = keyBy(orderedSymbologyConfig, 'priorityLevel');
     const symbologyConfig = symbologyConfigByPriorityLevel[thisFacilityPriority];
+    // TODO -  when priority_level is unrecognized. - do we need to also report facilities affected by this errors
+    if (symbologyConfig === undefined) {
+      logger?.(createWarnLog('Unrecognized priority level'));
+      return Result.fail('Unrecognized priority level', UNRECOGNIZED_PRIORITY_LEVEL);
+    }
 
     const overflowsConfig = symbologyConfig.symbologyOnOverflow;
     let colorChoice = overflowsConfig[overflowsConfig.length - 1].color;
@@ -65,7 +79,7 @@ export const colorDeciderFactory = (symbolConfig: SymbologyConfig, logger?: LogF
         break;
       }
     }
-    return colorChoice;
+    return Result.ok(colorChoice);
   };
 
   return colorDecider;
@@ -73,6 +87,7 @@ export const colorDeciderFactory = (symbolConfig: SymbologyConfig, logger?: LogF
 
 export const configValidationSchema = yup.object().shape({
   uuid: yup.string().required('Config does not have an identifier'),
+  title: yup.string(),
   baseUrl: yup.string().required('Base Url is required'),
   regFormId: yup.string().required('Geo point registration form is required'),
   visitFormId: yup.string().required('Visit form field is required'),
@@ -113,7 +128,7 @@ export async function getMostRecentVisitDateForFacility(
   // can run into an error,
   // can  yield an empty result.
   const query = {
-    query: `{"facility": ${facilityId}}`, // filter visit submissions for this facility
+    query: `{"${facilityOnVisitFormAcccessor}": ${facilityId}}`, // filter visit submissions for this facility
     sort: `{"${dateOfVisitAccessor}": -1}` // sort in descending, most recent first.
   };
 
@@ -131,7 +146,9 @@ export async function getMostRecentVisitDateForFacility(
         `Operation to fetch submission for facility: ${facilityId} failed with error: ${visitSubmissionsResult.error}`
       )
     );
-    return Result.fail<timestamp>(visitSubmissionsResult.error);
+
+    // TODO - can we create a result from another result; can add method passResult.
+    return Result.bubbleFailure<timestamp, unknown>(visitSubmissionsResult);
   }
 
   const visitSubmissions = visitSubmissionsResult.getValue();
@@ -148,7 +165,7 @@ export async function getMostRecentVisitDateForFacility(
     return Result.ok<timestamp>(dateOfVisit);
   } else {
     logger?.(createWarnLog(`facility _id: ${facilityId} has no visit submissions`));
-    return Result.ok<undefined>();
+    return Result.ok<undefined>(undefined, NO_VISIT_SUBMISSIONS);
   }
 }
 

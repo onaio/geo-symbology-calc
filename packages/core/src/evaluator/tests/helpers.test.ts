@@ -5,6 +5,7 @@ import { colorDeciderFactory } from '../../helpers/utils';
 import {
   dateOfVisitAccessor,
   editSubmissionEndpoint,
+  facilityOnVisitFormAcccessor,
   submittedDataEndpoint
 } from '../../constants';
 import { RegFormSubmission } from '../../helpers/types';
@@ -70,7 +71,7 @@ describe('transform facility tests', () => {
       .query({
         page_size: 1,
         page: 1,
-        query: `{"facility": ${regFomSubmission._id}}`, // filter visit submissions for this facility
+        query: `{"${facilityOnVisitFormAcccessor}": ${regFomSubmission._id}}`, // filter visit submissions for this facility
         sort: `{"${dateOfVisitAccessor}": -1}`
       })
       .reply(200, [{ [dateOfVisitAccessor]: '2023-01-08' }]);
@@ -103,8 +104,14 @@ describe('transform facility tests', () => {
     );
 
     expect(response).toEqual({
-      error: null,
-      modified: true
+      _value: undefined,
+      detail: {
+        code: 'SCODE1',
+        colorChange: 'green'
+      },
+      error: undefined,
+      isFailure: false,
+      isSuccess: true
     });
   });
 
@@ -123,7 +130,7 @@ describe('transform facility tests', () => {
       .query({
         page_size: 1,
         page: 1,
-        query: `{"facility": ${regFomSubmission._id}}`, // filter visit submissions for this facility
+        query: `{"${facilityOnVisitFormAcccessor}": ${regFomSubmission._id}}`, // filter visit submissions for this facility
         sort: `{"${dateOfVisitAccessor}": -1}`
       })
       .reply(502, { message: 'error' });
@@ -134,7 +141,7 @@ describe('transform facility tests', () => {
       .query({
         page_size: 1,
         page: 1,
-        query: `{"facility": ${regFomSubmission._id}}`, // filter visit submissions for this facility
+        query: `{"${facilityOnVisitFormAcccessor}": ${regFomSubmission._id}}`, // filter visit submissions for this facility
         sort: `{"${dateOfVisitAccessor}": -1}`
       })
       .reply(400, { message: 'error' });
@@ -166,7 +173,16 @@ describe('transform facility tests', () => {
       logger
     );
 
-    expect(response.modified).toBeFalsy();
+    expect(response).toEqual({
+      _value: undefined,
+      detail: {
+        code: 'ECODE3',
+        recsAffected: 0
+      },
+      error: '400: {"message":"error"}: Network request failed.',
+      isFailure: true,
+      isSuccess: false
+    });
     expect(response.error).toEqual('400: {"message":"error"}: Network request failed.');
   });
 
@@ -186,7 +202,7 @@ describe('transform facility tests', () => {
       .query({
         page_size: 1,
         page: 1,
-        query: `{"facility": ${regFomSubmission._id}}`, // filter visit submissions for this facility
+        query: `{"${facilityOnVisitFormAcccessor}": ${regFomSubmission._id}}`, // filter visit submissions for this facility
         sort: `{"${dateOfVisitAccessor}": -1}`
       })
       .reply(200, [{ [dateOfVisitAccessor]: '2023-01-08' }]);
@@ -221,8 +237,14 @@ describe('transform facility tests', () => {
     controller.abort();
     await response.then((value) => {
       expect(value).toEqual({
-        error: 'aborted: AbortError: The user aborted a request..',
-        modified: false
+        _value: undefined,
+        detail: {
+          code: 'ECODE3',
+          recsAffected: 0
+        },
+        error: 'AbortError: The user aborted a request..',
+        isFailure: true,
+        isSuccess: false
       });
     });
   });
