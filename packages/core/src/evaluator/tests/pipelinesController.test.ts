@@ -258,7 +258,7 @@ test('runOnSchedule with specific configId does not create duplicate tasks', () 
   expect(tasksAfterSecondSchedule?.toString()).toBe('task-* * * * *');
 
   // Verify only one task exists total
-  const allTasks = pipelinesController.getTasks();
+  const allTasks = pipelinesController.getTasks() as Array<{ toString: () => string }>;
   expect(allTasks).toHaveLength(1);
   expect(allTasks[0]?.toString()).toBe('task-* * * * *');
 });
@@ -278,10 +278,10 @@ test('runOnSchedule without configId schedules all pipelines', () => {
   // Schedule all pipelines
   pipelinesController.runOnSchedule();
 
-  const allTasks = pipelinesController.getTasks();
+  const allTasks = pipelinesController.getTasks() as Array<{ toString: () => string }>;
   // Should have tasks for both configs
   expect(allTasks).toHaveLength(2);
-  const taskStrings = allTasks.map((task) => task?.toString());
+  const taskStrings = allTasks.map((task: { toString: () => string }) => task?.toString());
   expect(taskStrings).toContain('task-* * * * *'); // config1 schedule
   expect(taskStrings).toContain('task-0 6 */7 * *'); // config2 schedule
 });
