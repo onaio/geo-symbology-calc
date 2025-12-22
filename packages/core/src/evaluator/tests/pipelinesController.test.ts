@@ -40,7 +40,10 @@ jest.mock('node-cron', () => {
   return {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     schedule: (cronString: string, _callback: () => unknown) => {
-      return `task-${cronString}`;
+      return {
+        stop: jest.fn(),
+        toString: () => `task-${cronString}`
+      };
     },
     validate: () => true
   };
@@ -174,10 +177,11 @@ it('error when fetching the registration form', async () => {
   expect(loggerMock.mock.calls).toEqual([
     [
       {
-        "level": "error",
-        "message": "Operation to fetch form: 3623, failed with err: Error Name: Error | Message: Request failed for | URL: https://test-api.ona.io/api/v1/forms/3623 | Status: 400",
-      },
-    ],
+        level: 'error',
+        message:
+          'Operation to fetch form: 3623, failed with err: Error Name: Error | Message: Request failed for | URL: https://test-api.ona.io/api/v1/forms/3623 | Status: 400'
+      }
+    ]
   ]);
 
   expect(nock.pendingMocks()).toEqual([]);
@@ -217,6 +221,69 @@ test('updates configs from empty configs', () => {
   pipelinesController.refreshConfigRunners();
   expect(pipelinesController.getPipelines()).toMatchObject([expect.any(ConfigRunner)]);
   expect(pipelinesController.getTasks()).toHaveLength(1);
+});
+
+test('runOnSchedule with specific configId does not create duplicate tasks', () => {
+  const loggerMock = jest.fn();
+  const config1 = createConfigs(loggerMock);
+  const config2 = {
+    ...createConfigs(loggerMock),
+    uuid: 'uuid-2',
+    regFormId: '3625',
+    schedule: '0 6 */7 * *'
+  };
+
+  const pipelinesController = new PipelinesController(() => [config1, config2]);
+
+  // Initially no tasks should be scheduled
+  expect(pipelinesController.getTasks()).toEqual([]);
+
+  // Schedule only config1
+  pipelinesController.runOnSchedule(config1.uuid);
+  const tasksAfterFirstSchedule = pipelinesController.getTasks(config1.uuid);
+
+  // Should have exactly one task for config1
+  expect(tasksAfterFirstSchedule).toBeDefined();
+  expect(tasksAfterFirstSchedule?.toString()).toBe('task-* * * * *');
+
+  // config2 should not be scheduled
+  expect(pipelinesController.getTasks(config2.uuid)).toBeUndefined();
+
+  // Call runOnSchedule again for the same config - should replace, not duplicate
+  pipelinesController.runOnSchedule(config1.uuid);
+  const tasksAfterSecondSchedule = pipelinesController.getTasks(config1.uuid);
+
+  // Should still have exactly one task (replaced, not duplicated)
+  expect(tasksAfterSecondSchedule).toBeDefined();
+  expect(tasksAfterSecondSchedule?.toString()).toBe('task-* * * * *');
+
+  // Verify only one task exists total
+  const allTasks = pipelinesController.getTasks() as Array<{ toString: () => string }>;
+  expect(allTasks).toHaveLength(1);
+  expect(allTasks[0]?.toString()).toBe('task-* * * * *');
+});
+
+test('runOnSchedule without configId schedules all pipelines', () => {
+  const loggerMock = jest.fn();
+  const config1 = createConfigs(loggerMock);
+  const config2 = {
+    ...createConfigs(loggerMock),
+    uuid: 'uuid-2',
+    regFormId: '3625',
+    schedule: '0 6 */7 * *'
+  };
+
+  const pipelinesController = new PipelinesController(() => [config1, config2]);
+
+  // Schedule all pipelines
+  pipelinesController.runOnSchedule();
+
+  const allTasks = pipelinesController.getTasks() as Array<{ toString: () => string }>;
+  // Should have tasks for both configs
+  expect(allTasks).toHaveLength(2);
+  const taskStrings = allTasks.map((task: { toString: () => string }) => task?.toString());
+  expect(taskStrings).toContain('task-* * * * *'); // config1 schedule
+  expect(taskStrings).toContain('task-0 6 */7 * *'); // config2 schedule
 });
 
 // can cancel evaluation.
