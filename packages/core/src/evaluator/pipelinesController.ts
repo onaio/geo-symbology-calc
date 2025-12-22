@@ -32,13 +32,22 @@ export class PipelinesController {
    * @param configId - id for the config whose pipeline should be queed to run on a schedule.
    */
   runOnSchedule(configId?: string) {
+    const scheduleOne = (id: string) => {
+      const pipeline = this.pipelines[id];
+      if (!pipeline) return;
+
+      // stop previous task (if any) before replacing it
+      this.tasks[id]?.stop();
+      this.tasks[id] = pipeline.schedule();
+    };
+
     if (configId) {
-      const interestingPipeline = this.pipelines[configId];
-      const task = interestingPipeline.schedule();
-      this.tasks[configId] = task;
+      scheduleOne(configId);
+      return;
     }
+
     for (const pipeline of Object.values(this.pipelines)) {
-      this.tasks[pipeline.config.uuid] = pipeline.schedule();
+      scheduleOne(pipeline.config.uuid);
     }
   }
 
