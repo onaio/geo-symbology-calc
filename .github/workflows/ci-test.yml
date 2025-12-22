@@ -10,7 +10,7 @@ on:
 jobs:
   test:
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         node-version: [20.x]
@@ -33,7 +33,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20.x' # Ensures Node.js version is 20 or higher
-          cache: 'yarn'        # Caches Yarn dependencies
+          cache: 'yarn' # Caches Yarn dependencies
 
       # Install dependencies using Yarn
       - name: Install dependencies
