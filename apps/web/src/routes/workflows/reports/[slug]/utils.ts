@@ -40,21 +40,22 @@ export function formatTimestamp(timeStamp: number) {
 	return new Date(timeStamp).toLocaleString();
 }
 
-
-export function formatTriggerDuration(start?: number, end?: number, isRunning=false){
-	if (start && end){
-		return `${formatTimestamp(start)}  to  ${formatTimestamp(end)} (${((end - start) / 60000).toFixed(0)} mins)`
+export function formatTriggerDuration(start?: number, end?: number, isRunning = false) {
+	if (start && end) {
+		return `${formatTimestamp(start)}  to  ${formatTimestamp(end)} (${(
+			(end - start) /
+			60000
+		).toFixed(0)} mins)`;
 	}
-	if(!start){
-		return `Unable to determine when pipeline was started`
+	if (!start) {
+		return `Unable to determine when pipeline was started`;
 	}
-	if(!end){
-		if(isRunning){
-			const runningFor = ((Date.now() - start) / 60000).toFixed(0)
-			return `Started at: ${formatTimestamp(start)}; (Running for ${runningFor} mins)`
-		}
-		else{
-			return `Started at: ${formatTimestamp(start)}; (Ran cancelled before completion)`
+	if (!end) {
+		if (isRunning) {
+			const runningFor = ((Date.now() - start) / 60000).toFixed(0);
+			return `Started at: ${formatTimestamp(start)}; (Running for ${runningFor} mins)`;
+		} else {
+			return `Started at: ${formatTimestamp(start)}; (Ran cancelled before completion)`;
 		}
 	}
 }
