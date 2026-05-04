@@ -10,7 +10,7 @@ import { v4 } from 'uuid';
 import { BaseFormSubmission, Color, Form, LogFn, RegFormSubmission } from '../../helpers/types';
 import { createErrorLog, createInfoLog, createVerboseLog } from '../../helpers/utils';
 import fetchRetry, { RequestInitWithRetry } from 'fetch-retry';
-import { NETWORK_ERROR, Result } from '../../helpers/Result';
+import { EVALUATION_ABORTED, NETWORK_ERROR, Result } from '../../helpers/Result';
 
 const persistentFetch = fetchRetry(fetch);
 
@@ -102,11 +102,18 @@ export class OnaApiService {
         return Result.ok<Form>(res);
       })
       .catch((err: Error) => {
-        const failResult = Result.fail<Form>(err, NETWORK_ERROR)
-        this.logger?.(
-          createErrorLog(`Operation to fetch form: ${formId}, failed with err: ${failResult.error}`)
-        );
-        return failResult
+        const code = err.name === AbortErrorName ? EVALUATION_ABORTED : NETWORK_ERROR;
+        const failResult = Result.fail<Form>(err, code);
+        if (code === EVALUATION_ABORTED) {
+          this.logger?.(createInfoLog(`Aborted fetch for form: ${formId}`));
+        } else {
+          this.logger?.(
+            createErrorLog(
+              `Operation to fetch form: ${formId}, failed with err: ${failResult.error}`
+            )
+          );
+        }
+        return failResult;
       });
   }
 
@@ -184,18 +191,26 @@ export class OnaApiService {
           return Result.ok(res);
         })
         .catch((err: Error) => {
-          
           let recsAffected = pageSize;
-          if ((totalSubmissions - (page * pageSize)) < pageSize) [
-            recsAffected = totalSubmissions - (page * pageSize)
-          ]
-          const failResult =  Result.fail<FormSubmissionT[]>(err, { code: NETWORK_ERROR, recsAffected, });
-          this.logger?.(
-            createErrorLog(
-              `Unable to fetch submissions for form id: ${formId} page: ${paginatedSubmissionsUrl} with err : ${failResult.error}`
-            )
-          );
-          return failResult
+          if ((totalSubmissions - (page * pageSize)) < pageSize) {
+            recsAffected = totalSubmissions - (page * pageSize);
+          }
+          const code = err.name === AbortErrorName ? EVALUATION_ABORTED : NETWORK_ERROR;
+          const failResult = Result.fail<FormSubmissionT[]>(err, { code, recsAffected });
+          if (code === EVALUATION_ABORTED) {
+            this.logger?.(
+              createInfoLog(
+                `Aborted submissions fetch for form id: ${formId} page: ${paginatedSubmissionsUrl}`
+              )
+            );
+          } else {
+            this.logger?.(
+              createErrorLog(
+                `Unable to fetch submissions for form id: ${formId} page: ${paginatedSubmissionsUrl} with err : ${failResult.error}`
+              )
+            );
+          }
+          return failResult;
         });
     } while (page * pageSize <= totalSubmissions);
   }
@@ -241,13 +256,22 @@ export class OnaApiService {
         );
         return Result.ok<Record<string, string>>(res);
       })
-      .catch((err) => {
-        const failResult = Result.fail(err, NETWORK_ERROR)
-        this.logger?.(
-          createErrorLog(
-            `Failed to edit sumbission with _id: ${submissionPayload._id} for form with id: ${formId} with err: ${failResult.error}`
-          )
-        );
+      .catch((err: Error) => {
+        const code = err.name === AbortErrorName ? EVALUATION_ABORTED : NETWORK_ERROR;
+        const failResult = Result.fail(err, code);
+        if (code === EVALUATION_ABORTED) {
+          this.logger?.(
+            createInfoLog(
+              `Aborted edit for submission _id: ${submissionPayload._id} for form: ${formId}`
+            )
+          );
+        } else {
+          this.logger?.(
+            createErrorLog(
+              `Failed to edit sumbission with _id: ${submissionPayload._id} for form with id: ${formId} with err: ${failResult.error}`
+            )
+          );
+        }
         return failResult;
       });
   }

@@ -37,22 +37,18 @@ export class ConfigRunner {
   public config: Config;
   /** Whether pipeline/runner is currently evaluating */
   private running = false;
-  /** request abort controller */
-  // private abortController;
+  /** request abort controller — replaced per transform() so cancel halts only the current run */
+  private abortController?: AbortController;
   /** stores validity of config */
   public invalidError: string | null = null;
-  /** metric category store for each run */
-  // private reporter: ReportMetric;
 
   constructor(config: Config) {
     this.config = config;
-    // this.abortController = new AbortController();
     try {
       validateConfigs(config);
     } catch (err: unknown) {
       this.invalidError = (err as Error).message;
     }
-    // this.reporter = new ReportMetric(config.uuid);
   }
 
   /** Runs the pipeline, generator that yields metric information regarding the current run */
@@ -77,13 +73,15 @@ export class ConfigRunner {
     let totalRegFormSubmissions = 0;
     yield reporter.generateJsonReport();
 
-    // const service = new OnaApiService(baseUrl, apiToken, logger, this.abortController);
-    const service = new OnaApiService(baseUrl, apiToken, logger);
+    const service = new OnaApiService(baseUrl, apiToken, logger, this.abortController);
     const colorDecider = colorDeciderFactory(symbolConfig, logger);
 
     abortableBlock: {
       const regForm = await service.fetchSingleForm(regFormId);
       if (regForm.isFailure) {
+        if (regForm.detail?.code === EVALUATION_ABORTED) {
+          break abortableBlock;
+        }
         reporter.updateGeneralError(`Fetching form with id ${regFormId} failed due to : ${regForm.error}`)
         yield reporter.generateJsonReport(true);
         return;
@@ -157,6 +155,9 @@ export class ConfigRunner {
 
         let cursor = 0;
         while (cursor <= updateRegFormSubmissionsPromises.length) {
+          if (this.abortController?.signal.aborted) {
+            break abortableBlock;
+          }
           const end = cursor + editSubmissionsChunks;
           const chunksToSend = updateRegFormSubmissionsPromises.slice(cursor, end);
           cursor = cursor + editSubmissionsChunks;
@@ -181,19 +182,21 @@ export class ConfigRunner {
     if (this.invalidError) {
       return Result.fail(`Configuration is not valid, ${this.invalidError}`);
     }
-    // create a function that parses the config and supplies default values.
     const WriteMetric = config.writeMetric ?? defaultWriteMetric;
     if (this.running) {
       return Result.fail('Pipeline is already running.');
-    } else {
-      this.running = true;
+    }
+    this.running = true;
+    this.abortController = new AbortController();
+    try {
       let finalMetric;
       for await (const metric of this.transformGenerator(triggeredVia)) {
         WriteMetric(metric as any);
         finalMetric = metric;
       }
-      this.running = false;
       return Result.ok(finalMetric);
+    } finally {
+      this.running = false;
     }
   }
 
@@ -209,13 +212,12 @@ export class ConfigRunner {
     return task;
   }
 
-  /** Cancel evaluation using a configured abortController */
+  /** Cancel the in-flight evaluation by aborting outstanding HTTP requests. */
   cancel() {
-    // const abortController = this.abortController;
     if (!this.running) {
       return;
     }
-    // abortController.abort();
+    this.abortController?.abort();
     return Result.ok();
   }
 

@@ -286,4 +286,61 @@ test('runOnSchedule without configId schedules all pipelines', () => {
   expect(taskStrings).toContain('task-0 6 */7 * *'); // config2 schedule
 });
 
-// can cancel evaluation.
+test('cancel aborts in-flight requests and a subsequent transform runs with a fresh controller', async () => {
+  const loggerMock = jest.fn();
+  const configs = createConfigs(loggerMock);
+
+  // Hold the form fetch open long enough to cancel before it returns. No
+  // submissions/edit mocks are registered — if cancel does not abort cleanly,
+  // the pipeline would hit nock.disableNetConnect and fail the test.
+  nock(configs.baseUrl).get(`/${formEndpoint}/3623`).delay(2000).reply(200, form3623);
+
+  const pipelinesController = new PipelinesController(() => [configs]);
+  const runner = pipelinesController.getPipelines(configs.uuid) as ConfigRunner;
+
+  const firstRun = runner.transform();
+  await flushPromises();
+  expect(runner.isRunning()).toBe(true);
+
+  runner.cancel();
+  const firstResult = await firstRun;
+
+  expect(runner.isRunning()).toBe(false);
+  expect(firstResult.isSuccess).toBe(true);
+  expect(nock.pendingMocks()).toEqual([]);
+
+  const abortLogged = loggerMock.mock.calls.some(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ([entry]: any[]) =>
+      entry?.level === 'info' &&
+      typeof entry?.message === 'string' &&
+      entry.message.includes('Aborted fetch for form: 3623')
+  );
+  expect(abortLogged).toBe(true);
+
+  // Second run proves the AbortController was rotated — otherwise the new
+  // transform would be born already-aborted and would not reach a state where
+  // isRunning is true and a fresh abort log is emitted.
+  loggerMock.mockClear();
+  nock(configs.baseUrl).get(`/${formEndpoint}/3623`).delay(2000).reply(200, form3623);
+
+  const secondRun = runner.transform();
+  await flushPromises();
+  expect(runner.isRunning()).toBe(true);
+
+  runner.cancel();
+  const secondResult = await secondRun;
+
+  expect(runner.isRunning()).toBe(false);
+  expect(secondResult.isSuccess).toBe(true);
+  expect(nock.pendingMocks()).toEqual([]);
+
+  const secondAbortLogged = loggerMock.mock.calls.some(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ([entry]: any[]) =>
+      entry?.level === 'info' &&
+      typeof entry?.message === 'string' &&
+      entry.message.includes('Aborted fetch for form: 3623')
+  );
+  expect(secondAbortLogged).toBe(true);
+});
