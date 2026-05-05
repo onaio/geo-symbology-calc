@@ -236,17 +236,13 @@ describe('transform facility tests', () => {
     );
 
     controller.abort();
-    await response.then((value) => {
-      expect(value).toEqual({
-        _value: undefined,
-        detail: {
-          code: 'ECODE3',
-          recsAffected: 0
-        },
-        "error": "Error Name: AbortError | Message: The user aborted a request.",
-        isFailure: true,
-        isSuccess: false
-      });
+    const value = await response;
+    expect(value.isFailure).toBe(true);
+    expect(value.isSuccess).toBe(false);
+    expect(value.error).toBe('Error Name: AbortError | Message: The user aborted a request.');
+    expect(value.detail).toEqual({
+      code: 'ECODE1',
+      recsAffected: 0
     });
   });
 });

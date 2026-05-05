@@ -1,6 +1,5 @@
 import cronstrue from 'cronstrue';
 
-
 /** Converts a cron syntax string to huma readable string
  * @param cronString - cron-like syntax string.
  */
