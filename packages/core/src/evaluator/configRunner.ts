@@ -65,8 +65,10 @@ export class ConfigRunner {
       regFormSubmissionChunks: facilityProcessingChunks,
       editSubmissionChunks: facilityEditChunks
     } = config;
-    const regFormSubmissionChunks = facilityProcessingChunks ?? 1000;
-    const editSubmissionsChunks = facilityEditChunks ?? 100;
+    // Coerce to numbers — JSON configs can carry these as strings, and string + number
+    // in the cursor arithmetic below silently corrupts the chunk loop.
+    const regFormSubmissionChunks = Number(facilityProcessingChunks ?? 1000);
+    const editSubmissionsChunks = Number(facilityEditChunks ?? 100);
     const reporter = new ReportMetric(configId);
     reporter.updateStart(triggeredVia);
 
