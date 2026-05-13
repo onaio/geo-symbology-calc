@@ -23,16 +23,19 @@ export const createErrorLog = (message: string) => ({ level: LogMessageLevels.ER
 export const createDebugLog = (message: string) => ({ level: LogMessageLevels.DEBUG, message });
 export const createVerboseLog = (message: string) => ({ level: LogMessageLevels.VERBOSE, message });
 
-/** for each priority level order the symbology on overflow such that the overflow days are in ascending order. */
+/** for each priority level order the symbology on overflow such that the overflow days are in ascending order.
+ * Also coerces `frequency` and `overFlowDays` to numbers — the loaded JSON config can carry them as
+ * strings, which would silently break the `frequency + overFlowDays` arithmetic in `colorDecider`
+ * (string concatenation instead of addition). */
 const orderSymbologyConfig = (config: SymbologyConfig) => {
   return config.map(({ priorityLevel, symbologyOnOverflow, frequency }) => {
-    const unorderedOverFlowDays = symbologyOnOverflow;
     return {
       priorityLevel,
-      frequency,
-      symbologyOnOverflow: unorderedOverFlowDays.slice().sort((overFlow1, overFlow2) => {
-        return overFlow1.overFlowDays - overFlow2.overFlowDays;
-      })
+      frequency: Number(frequency),
+      symbologyOnOverflow: symbologyOnOverflow
+        .slice()
+        .map(({ overFlowDays, color }) => ({ overFlowDays: Number(overFlowDays), color }))
+        .sort((overFlow1, overFlow2) => overFlow1.overFlowDays - overFlow2.overFlowDays)
     };
   });
 };
