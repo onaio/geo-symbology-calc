@@ -160,6 +160,92 @@ it('works correctly nominal case', async () => {
   expect(nock.pendingMocks()).toEqual([]);
 });
 
+it('accepts string-typed chunk sizes from JSON-loaded configs', async () => {
+  // JSON-loaded configs deliver `regFormSubmissionChunks` and `editSubmissionChunks`
+  // as strings even though the Config type declares them as numbers. The chunk loop
+  // in transformGenerator does `cursor = cursor + editSubmissionsChunks`, which
+  // silently flips cursor to a string and grows it each iteration. Array.prototype.slice
+  // coerces the string indices, so the same total facilities still get processed —
+  // which is why this is a smoke test, not a behavioural diff. The point is to lock
+  // in that string inputs flow through to the same metric output as numeric inputs.
+  const loggerMock = jest.fn();
+  const configs = {
+    ...createConfigs(loggerMock),
+    regFormSubmissionChunks: '1000' as unknown as number,
+    editSubmissionChunks: '100' as unknown as number
+  };
+
+  nock(configs.baseUrl).get(`/${formEndpoint}/3623`).reply(200, form3623);
+
+  nock(configs.baseUrl)
+    .get(`/${submittedDataEndpoint}/3623`)
+    .query({ page_size: 1000, page: 1 })
+    .reply(200, form3623Submissions);
+
+  form3623Submissions.forEach((submission) => {
+    const facilityId = submission._id;
+    nock(configs.baseUrl)
+      .get(`/${submittedDataEndpoint}/3624`)
+      .query({
+        page_size: 1,
+        page: 1,
+        query: `{"facility": ${facilityId}}`,
+        sort: '{"endtime": -1}'
+      })
+      .reply(
+        200,
+        form3624Submissions.filter((sub) => `${sub.facility}` === `${submission._id}`)
+      );
+
+    const submissionsWithValidPost = [
+      304870, 304871, 304872, 304873, 304874, 304889, 304890, 304892
+    ];
+    if (!submissionsWithValidPost.includes(facilityId)) {
+      return;
+    }
+
+    nock(configs.baseUrl)
+      .post(`/${editSubmissionEndpoint}`, {
+        id: '3623',
+        submission: {
+          ...submission,
+          'marker-color': 'red',
+          meta: {
+            instanceID: 'uuid:0af4f147-d5fd-486a-bf76-d1bf850cc976',
+            deprecatedID: submission['meta/instanceID']
+          }
+        }
+      })
+      .reply(201, {
+        message: 'Successful submission.',
+        formid: 'cameroon_iss_registration_v2_1'
+      });
+  });
+
+  const pipelinesController = new PipelinesController(() => [configs]);
+  const runner = pipelinesController.getPipelines(configs.uuid) as ConfigRunner;
+  const metric = await runner.transform();
+
+  expect(metric.getValue()).toEqual({
+    configId: 'uuid',
+    facilitiesEvaluated: {
+      modified: { red: 8, total: 8 },
+      notModified: {
+        ECODE2: { description: 'Facility does not have a priority level', total: 2 },
+        total: 2
+      },
+      total: 10
+    },
+    facilitiesNotEvaluated: { total: 0 },
+    totalFacilities: 10,
+    totalFacilitiesEvaluated: 10,
+    trigger: { by: 'schedule', from: 1673275673342, to: 1673275673342, tookMills: 0 }
+  });
+
+  await flushPromises();
+  expect(nock.pendingMocks()).toEqual([]);
+});
+
 it('error when fetching the registration form', async () => {
   const loggerMock = jest.fn();
   const configs = createConfigs(loggerMock);

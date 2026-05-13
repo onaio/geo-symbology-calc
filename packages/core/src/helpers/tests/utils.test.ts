@@ -1,5 +1,5 @@
 import { createConfigs, form3623Submissions } from '../../evaluator/tests/fixtures/fixtures';
-import { LogMessageLevels, RegFormSubmission } from '../types';
+import { LogMessageLevels, PriorityLevel, RegFormSubmission, SymbologyConfig } from '../types';
 import {
   colorDeciderFactory,
   createDebugLog,
@@ -67,5 +67,27 @@ describe('colorDecider', () => {
     expect(colorDecider(31, submission).getValue()).toEqual('red');
     expect(colorDecider(32, submission).getValue()).toEqual('red');
     expect(colorDecider(99999, submission).getValue()).toEqual('red');
+  });
+
+  // Regression: production JSON configs deliver frequency and overFlowDays as strings.
+  // The decider must coerce them before arithmetic; otherwise "30" + "0" yields "300"
+  // and Low-priority facilities stay green for up to 300 days instead of 30.
+  it('Treats string-typed frequency and overFlowDays as numbers', () => {
+    const stringTypedConfig = [
+      {
+        priorityLevel: PriorityLevel.LOW,
+        frequency: '30' as unknown as number,
+        symbologyOnOverflow: [
+          { overFlowDays: '0' as unknown as number, color: 'green' },
+          { overFlowDays: '1' as unknown as number, color: 'red' }
+        ]
+      }
+    ] as SymbologyConfig;
+    const decider = colorDeciderFactory(stringTypedConfig, jest.fn());
+    const submission = form3623Submissions[2] as RegFormSubmission;
+    expect(decider(30, submission).getValue()).toEqual('green');
+    expect(decider(31, submission).getValue()).toEqual('red');
+    expect(decider(87, submission).getValue()).toEqual('red');
+    expect(decider(300, submission).getValue()).toEqual('red');
   });
 });
