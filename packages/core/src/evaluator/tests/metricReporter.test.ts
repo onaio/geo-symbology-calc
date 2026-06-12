@@ -1,4 +1,4 @@
-import { ReportMetric } from '../metricReporter';
+import { normalizeErrorSample, ReportMetric } from '../metricReporter';
 import { MISSING_PRIORITY_LEVEL, NETWORK_ERROR } from '../../helpers/Result';
 
 const getNotModified = (reporter: ReportMetric) =>
@@ -122,5 +122,19 @@ it('does not let a yielded report mutate when the reporter keeps accumulating', 
     description: 'Request failed due to an unrecoverable network error',
     statusBreakdown: { '500': 1 },
     samples: [{ at: 1000, message: 'first' }]
+  });
+});
+
+describe('normalizeErrorSample', () => {
+  it('wraps a legacy string sample into the current object shape', () => {
+    // reports persisted before timestamps were added hold plain message strings.
+    expect(normalizeErrorSample('URL: a | Status: 500')).toEqual({
+      message: 'URL: a | Status: 500'
+    });
+  });
+
+  it('passes through an already-normalized sample unchanged', () => {
+    const sample = { at: 1000, message: 'URL: a | Status: 500' };
+    expect(normalizeErrorSample(sample)).toBe(sample);
   });
 });

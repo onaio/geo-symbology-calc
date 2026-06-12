@@ -26,6 +26,12 @@ export interface ErrorSample {
   message: string;
 }
 
+/** Coerces a stored error sample to the current object shape. Reports persisted
+ * before timestamps were added hold plain message strings; normalize those to a
+ * timestamp-less { message } so consumers can treat all samples uniformly. */
+export const normalizeErrorSample = (sample: string | ErrorSample): ErrorSample =>
+  typeof sample === 'string' ? { message: sample } : sample;
+
 // accumulates the failure context seen for a single reason code.
 interface FailureDetailAccumulator {
   // number of affected facilities per http status (key is the status, e.g. '500').

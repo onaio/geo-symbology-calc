@@ -2,6 +2,7 @@
 	import type { PageData } from './$types';
 	import { range } from 'lodash-es';
 	import { formatTimestamp, formatTriggerDuration, parseForTable } from './utils';
+	import { normalizeErrorSample, type ErrorSample } from '@onaio/symbology-calc-core';
 	import PageHeader from '$lib/shared/components/PageHeader.svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from '@zerodevx/svelte-toast';
@@ -62,7 +63,8 @@
 		// http status -> affected facility count, present only for network failures.
 		statusBreakdown?: Record<string, number>;
 		// sample underlying errors (url | status | message) with the time each occurred.
-		samples?: { at?: number; message: string }[];
+		// legacy reports (before timestamps) persisted these as plain strings.
+		samples?: (string | ErrorSample)[];
 	};
 
 	// TODO - below section DRY out these functions.
@@ -279,10 +281,11 @@
 													{#if row[1].samples}
 														<ul class="mb-0 small text-muted">
 															{#each row[1].samples as sample}
+																{@const normalized = normalizeErrorSample(sample)}
 																<li>
-																	{#if sample.at}<span class="fw-bold"
-																			>{formatTimestamp(sample.at)}</span
-																		> &mdash; {/if}{sample.message}
+																	{#if normalized.at}<span class="fw-bold"
+																			>{formatTimestamp(normalized.at)}</span
+																		> &mdash; {/if}{normalized.message}
 																</li>
 															{/each}
 														</ul>
@@ -329,10 +332,11 @@
 													{#if row[1].samples}
 														<ul class="mb-0 small text-muted">
 															{#each row[1].samples as sample}
+																{@const normalized = normalizeErrorSample(sample)}
 																<li>
-																	{#if sample.at}<span class="fw-bold"
-																			>{formatTimestamp(sample.at)}</span
-																		> &mdash; {/if}{sample.message}
+																	{#if normalized.at}<span class="fw-bold"
+																			>{formatTimestamp(normalized.at)}</span
+																		> &mdash; {/if}{normalized.message}
 																</li>
 															{/each}
 														</ul>
