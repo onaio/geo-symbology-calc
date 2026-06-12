@@ -80,7 +80,13 @@ export type ResultCodes =
   | WarningResultCodes;
 
 export type SuccessResultDetail = { code?: ResultCodes | string; colorChange?: string };
-export type FailureResultDetail = { code?: ResultCodes | string; recsAffected?: number };
+export type FailureResultDetail = {
+  code?: ResultCodes | string;
+  recsAffected?: number;
+  // HTTP status code of the failed request, when the failure came from an http
+  // response (as opposed to a transport-level error like a timeout or DNS failure).
+  httpStatus?: number;
+};
 export type ResultDetail = SuccessResultDetail | FailureResultDetail;
 
 /** This is a generic interface that describes the output (or ... Result) of
