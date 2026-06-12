@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { range } from 'lodash-es';
-	import { formatTriggerDuration, parseForTable } from './utils';
+	import { formatTimestamp, formatTriggerDuration, parseForTable } from './utils';
 	import PageHeader from '$lib/shared/components/PageHeader.svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from '@zerodevx/svelte-toast';
@@ -61,8 +61,8 @@
 		description: string;
 		// http status -> affected facility count, present only for network failures.
 		statusBreakdown?: Record<string, number>;
-		// sample underlying error messages (url | status | message).
-		samples?: string[];
+		// sample underlying errors (url | status | message) with the time each occurred.
+		samples?: { at?: number; message: string }[];
 	};
 
 	// TODO - below section DRY out these functions.
@@ -279,7 +279,11 @@
 													{#if row[1].samples}
 														<ul class="mb-0 small text-muted">
 															{#each row[1].samples as sample}
-																<li>{sample}</li>
+																<li>
+																	{#if sample.at}<span class="fw-bold"
+																			>{formatTimestamp(sample.at)}</span
+																		> &mdash; {/if}{sample.message}
+																</li>
 															{/each}
 														</ul>
 													{/if}
@@ -325,7 +329,11 @@
 													{#if row[1].samples}
 														<ul class="mb-0 small text-muted">
 															{#each row[1].samples as sample}
-																<li>{sample}</li>
+																<li>
+																	{#if sample.at}<span class="fw-bold"
+																			>{formatTimestamp(sample.at)}</span
+																		> &mdash; {/if}{sample.message}
+																</li>
 															{/each}
 														</ul>
 													{/if}

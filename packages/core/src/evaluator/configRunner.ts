@@ -116,7 +116,7 @@ export class ConfigRunner {
               sanitizedCode,
               recsAffected ?? 0,
               sanitizedCode === NETWORK_ERROR
-                ? { httpStatus, errorSample: regFormSubmissionsResult.error }
+                ? { httpStatus, errorSample: regFormSubmissionsResult.error, errorTime: Date.now() }
                 : undefined
             );
           }
@@ -147,7 +147,8 @@ export class ConfigRunner {
                 resultCode === NETWORK_ERROR
                   ? {
                       httpStatus: failureDetail.httpStatus,
-                      errorSample: transformFacilityResult.error
+                      errorSample: transformFacilityResult.error,
+                      errorTime: Date.now()
                     }
                   : undefined
               );

@@ -6,26 +6,33 @@ const getNotModified = (reporter: ReportMetric) =>
 const getNotEvaluated = (reporter: ReportMetric) =>
   (reporter.generateJsonReport() as any).facilitiesNotEvaluated;
 
-it('aggregates an http status breakdown and sample messages for network errors', () => {
+it('aggregates an http status breakdown and timestamped sample messages for network errors', () => {
   const reporter = new ReportMetric('uuid');
   reporter.updateEvaluatedNotModified(NETWORK_ERROR, {
     httpStatus: 500,
-    errorSample: 'URL: a | Status: 500'
+    errorSample: 'URL: a | Status: 500',
+    errorTime: 1000
   });
   reporter.updateEvaluatedNotModified(NETWORK_ERROR, {
     httpStatus: 500,
-    errorSample: 'URL: b | Status: 500'
+    errorSample: 'URL: b | Status: 500',
+    errorTime: 2000
   });
   reporter.updateEvaluatedNotModified(NETWORK_ERROR, {
     httpStatus: 429,
-    errorSample: 'URL: c | Status: 429'
+    errorSample: 'URL: c | Status: 429',
+    errorTime: 3000
   });
 
   expect(getNotModified(reporter)[NETWORK_ERROR]).toEqual({
     total: 3,
     description: 'Request failed due to an unrecoverable network error',
     statusBreakdown: { '500': 2, '429': 1 },
-    samples: ['URL: a | Status: 500', 'URL: b | Status: 500', 'URL: c | Status: 429']
+    samples: [
+      { at: 1000, message: 'URL: a | Status: 500' },
+      { at: 2000, message: 'URL: b | Status: 500' },
+      { at: 3000, message: 'URL: c | Status: 429' }
+    ]
   });
 });
 
@@ -42,13 +49,14 @@ it('omits breakdown fields for non-network reasons', () => {
 it('records a status entry but no samples for transport errors without an http status', () => {
   const reporter = new ReportMetric('uuid');
   reporter.updateEvaluatedNotModified(NETWORK_ERROR, {
-    errorSample: 'Error Name: FetchError | Message: request timed out'
+    errorSample: 'Error Name: FetchError | Message: request timed out',
+    errorTime: 4242
   });
 
   expect(getNotModified(reporter)[NETWORK_ERROR]).toEqual({
     total: 1,
     description: 'Request failed due to an unrecoverable network error',
-    samples: ['Error Name: FetchError | Message: request timed out']
+    samples: [{ at: 4242, message: 'Error Name: FetchError | Message: request timed out' }]
   });
 });
 
@@ -73,33 +81,46 @@ it('accumulates not-evaluated counts across failed pages, consistent with the br
   const reporter = new ReportMetric('uuid');
   reporter.updateFacilitiesNotEvaluated(NETWORK_ERROR, 1000, {
     httpStatus: 500,
-    errorSample: 'page-1'
+    errorSample: 'page-1',
+    errorTime: 1000
   });
   reporter.updateFacilitiesNotEvaluated(NETWORK_ERROR, 1000, {
     httpStatus: 500,
-    errorSample: 'page-2'
+    errorSample: 'page-2',
+    errorTime: 2000
   });
 
   const entry = getNotEvaluated(reporter)[NETWORK_ERROR];
   expect(entry.total).toEqual(2000);
   expect(entry.statusBreakdown).toEqual({ '500': 2000 });
-  expect(entry.samples).toEqual(['page-1', 'page-2']);
+  expect(entry.samples).toEqual([
+    { at: 1000, message: 'page-1' },
+    { at: 2000, message: 'page-2' }
+  ]);
 });
 
 it('does not let a yielded report mutate when the reporter keeps accumulating', () => {
   const reporter = new ReportMetric('uuid');
-  reporter.updateEvaluatedNotModified(NETWORK_ERROR, { httpStatus: 500, errorSample: 'first' });
+  reporter.updateEvaluatedNotModified(NETWORK_ERROR, {
+    httpStatus: 500,
+    errorSample: 'first',
+    errorTime: 1000
+  });
 
   const firstReport = getNotModified(reporter)[NETWORK_ERROR];
 
   // keep running: another failure of the same code arrives.
-  reporter.updateEvaluatedNotModified(NETWORK_ERROR, { httpStatus: 429, errorSample: 'second' });
+  reporter.updateEvaluatedNotModified(NETWORK_ERROR, {
+    httpStatus: 429,
+    errorSample: 'second',
+    errorTime: 2000
+  });
 
   // the previously-yielded report must be unchanged.
   expect(firstReport).toEqual({
     total: 1,
     description: 'Request failed due to an unrecoverable network error',
     statusBreakdown: { '500': 1 },
-    samples: ['first']
+    samples: [{ at: 1000, message: 'first' }]
   });
 });
