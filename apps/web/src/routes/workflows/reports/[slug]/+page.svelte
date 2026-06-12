@@ -55,6 +55,16 @@
 			});
 	};
 
+	// shape of a single reason row in the not-modified / not-evaluated report tables.
+	type ReasonRow = {
+		total: number;
+		description: string;
+		// http status -> affected facility count, present only for network failures.
+		statusBreakdown?: Record<string, number>;
+		// sample underlying error messages (url | status | message).
+		samples?: string[];
+	};
+
 	// TODO - below section DRY out these functions.
 	const getModifiedColors = (metric: any) => {
 		const onlyModified = { ...metric.facilitiesEvaluated.modified };
@@ -62,16 +72,26 @@
 		return onlyModified;
 	};
 
-	const getNotModifiedReasons = (metric: any) => {
+	const getNotModifiedReasons = (metric: any): Record<string, ReasonRow> => {
 		const onlyNotModified = { ...metric.facilitiesEvaluated.notModified };
 		delete onlyNotModified.total;
 		return onlyNotModified;
 	};
 
-	const getNotEvaluatedReasons = (metric: any) => {
+	const getNotEvaluatedReasons = (metric: any): Record<string, ReasonRow> => {
 		const notEvaluatedReasons = { ...metric.facilitiesNotEvaluated };
 		delete notEvaluatedReasons.total;
 		return notEvaluatedReasons;
+	};
+
+	// renders a per-reason http status breakdown, e.g. "HTTP 500: 3000, HTTP 429: 485".
+	const formatStatusBreakdown = (statusBreakdown?: Record<string, number>) => {
+		if (!statusBreakdown) {
+			return '';
+		}
+		return Object.entries(statusBreakdown)
+			.map(([status, count]) => `HTTP ${status}: ${count}`)
+			.join(', ');
 	};
 </script>
 
@@ -243,6 +263,7 @@
 											<th>Reason code</th>
 											<th>Reason description</th>
 											<th>No. of facilities</th>
+											<th>Details</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -251,11 +272,23 @@
 												<td>{row[0]}</td>
 												<td> {row[1].description}</td>
 												<td>{row[1].total}</td>
+												<td class="text-start">
+													{#if row[1].statusBreakdown}
+														<div>{formatStatusBreakdown(row[1].statusBreakdown)}</div>
+													{/if}
+													{#if row[1].samples}
+														<ul class="mb-0 small text-muted">
+															{#each row[1].samples as sample}
+																<li>{sample}</li>
+															{/each}
+														</ul>
+													{/if}
+												</td>
 											</tr>
 										{/each}
 										<tr>
 											<td colspan="2"> Total</td>
-											<td>
+											<td colspan="2">
 												{metric.facilitiesEvaluated.notModified.total}
 											</td>
 										</tr>
@@ -276,6 +309,7 @@
 											<th>Reason code</th>
 											<th>Reason description</th>
 											<th>No. of facilities</th>
+											<th>Details</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -284,12 +318,24 @@
 												<td>{row[0]}</td>
 												<td> {row[1].description}</td>
 												<td>{row[1].total}</td>
+												<td class="text-start">
+													{#if row[1].statusBreakdown}
+														<div>{formatStatusBreakdown(row[1].statusBreakdown)}</div>
+													{/if}
+													{#if row[1].samples}
+														<ul class="mb-0 small text-muted">
+															{#each row[1].samples as sample}
+																<li>{sample}</li>
+															{/each}
+														</ul>
+													{/if}
+												</td>
 											</tr>
 										{/each}
 
 										<tr>
 											<td colspan="2">Total</td>
-											<td>
+											<td colspan="2">
 												{metric.facilitiesNotEvaluated.total}
 											</td>
 										</tr>

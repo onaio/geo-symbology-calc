@@ -17,6 +17,7 @@ import {
   ResultCodes,
   UNKNOWN_SUCCESS_REASON,
   EVALUATION_ABORTED,
+  NETWORK_ERROR,
   SuccessResultDetail,
   FailureResultDetail
 } from '../helpers/Result';
@@ -107,11 +108,17 @@ export class ConfigRunner {
             // this.updateMetric(EVALUATION_ABORTED, 0)
             break abortableBlock;
           } else {
-            const { code, recsAffected } = (regFormSubmissionsResult.detail ??
+            const { code, recsAffected, httpStatus } = (regFormSubmissionsResult.detail ??
               {}) as FailureResultDetail;
             const sanitizedCode = code ?? UNKNOWN_TRANSFORM_FACILITY_ERROR;
             // TODO - we are still updating metric reports as sideEffects in the code.
-            reporter.updateFacilitiesNotEvaluated(sanitizedCode, recsAffected ?? 0);
+            reporter.updateFacilitiesNotEvaluated(
+              sanitizedCode,
+              recsAffected ?? 0,
+              sanitizedCode === NETWORK_ERROR
+                ? { httpStatus, errorSample: regFormSubmissionsResult.error }
+                : undefined
+            );
           }
           continue;
         }
@@ -134,7 +141,16 @@ export class ConfigRunner {
             // TODO - refactor all this.
             if (transformFacilityResult.isFailure) {
               if (!resultCode) resultCode = UNKNOWN_TRANSFORM_FACILITY_ERROR;
-              reporter.updateEvaluatedNotModified(resultCode);
+              const failureDetail = (transformFacilityResult.detail ?? {}) as FailureResultDetail;
+              reporter.updateEvaluatedNotModified(
+                resultCode,
+                resultCode === NETWORK_ERROR
+                  ? {
+                      httpStatus: failureDetail.httpStatus,
+                      errorSample: transformFacilityResult.error
+                    }
+                  : undefined
+              );
             } else if (
               transformFacilityResult.isSuccess &&
               (transformFacilityResult.detail as SuccessResultDetail)?.colorChange === undefined

@@ -103,7 +103,7 @@ export class OnaApiService {
       })
       .catch((err: Error) => {
         const code = err.name === AbortErrorName ? EVALUATION_ABORTED : NETWORK_ERROR;
-        const failResult = Result.fail<Form>(err, code);
+        const failResult = Result.fail<Form>(err, { code, httpStatus: (err as ErrorWithStatus).status });
         if (code === EVALUATION_ABORTED) {
           this.logger?.(createInfoLog(`Aborted fetch for form: ${formId}`));
         } else {
@@ -196,7 +196,8 @@ export class OnaApiService {
             recsAffected = totalSubmissions - (page * pageSize);
           }
           const code = err.name === AbortErrorName ? EVALUATION_ABORTED : NETWORK_ERROR;
-          const failResult = Result.fail<FormSubmissionT[]>(err, { code, recsAffected });
+          const httpStatus = (err as ErrorWithStatus).status;
+          const failResult = Result.fail<FormSubmissionT[]>(err, { code, recsAffected, httpStatus });
           if (code === EVALUATION_ABORTED) {
             this.logger?.(
               createInfoLog(
@@ -258,7 +259,7 @@ export class OnaApiService {
       })
       .catch((err: Error) => {
         const code = err.name === AbortErrorName ? EVALUATION_ABORTED : NETWORK_ERROR;
-        const failResult = Result.fail(err, code);
+        const failResult = Result.fail(err, { code, httpStatus: (err as ErrorWithStatus).status });
         if (code === EVALUATION_ABORTED) {
           this.logger?.(
             createInfoLog(
@@ -297,6 +298,12 @@ export async function upLoadMarkerColor(
 }
 
 
+/** Error thrown for non-ok http responses. Carries the http status so callers
+ * can surface it in reports instead of only a generic message. */
+export interface ErrorWithStatus extends Error {
+  status?: number;
+}
+
 function throwHttpError(response: Response) {
   const { status, url } = response;
   let errorDetails = [];
@@ -311,5 +318,7 @@ function throwHttpError(response: Response) {
     ? errorDetails.join(' | ')
     : "An unknown network error occurred.";
 
-    throw new Error(errorMessage)
+  const error: ErrorWithStatus = new Error(errorMessage);
+  if (status) error.status = status;
+  throw error;
 }
