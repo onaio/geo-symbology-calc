@@ -18,8 +18,8 @@ export interface FailureReportInput {
 
 // accumulates the failure context seen for a single reason code.
 interface FailureDetailAccumulator {
-  // number of affected facilities per http status (key is the status, e.g. '500',
-  // or 'no-status' is omitted - transport errors simply contribute no status entry).
+  // number of affected facilities per http status (key is the status, e.g. '500').
+  // transport errors (timeout, DNS) have no http status and contribute no entry.
   statusBreakdown: Record<string, number>;
   // a capped, de-duplicated list of underlying error messages.
   samples: string[];
@@ -99,11 +99,13 @@ export class ReportMetric {
       total,
       description: ResultCodingsDescriptions[code] as string
     };
+    // copy, don't alias: generateJsonReport runs repeatedly over the same live
+    // accumulators, so a previously-yielded report must not mutate underneath us.
     if (Object.keys(accumulator.statusBreakdown).length > 0) {
-      row.statusBreakdown = accumulator.statusBreakdown;
+      row.statusBreakdown = { ...accumulator.statusBreakdown };
     }
     if (accumulator.samples.length > 0) {
-      row.samples = accumulator.samples;
+      row.samples = [...accumulator.samples];
     }
     return row;
   }
@@ -131,7 +133,10 @@ export class ReportMetric {
     if (this.facilitiesNotEvaluated[code] === undefined) {
       this.facilitiesNotEvaluated[code] = { recsAffected: 0, statusBreakdown: {}, samples: [] };
     }
-    this.facilitiesNotEvaluated[code].recsAffected = value;
+    // accumulate across calls: a single reason code can be reported once per failed
+    // page, and each page contributes its own slice of affected facilities. summing
+    // keeps recsAffected consistent with the per-status breakdown below.
+    this.facilitiesNotEvaluated[code].recsAffected += value;
     this.recordFailureDetail(this.facilitiesNotEvaluated[code], detail, value);
   }
 
