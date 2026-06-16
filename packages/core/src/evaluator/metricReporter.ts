@@ -14,15 +14,31 @@ export interface FailureReportInput {
   httpStatus?: number;
   // a representative underlying error message (url | status | message).
   errorSample?: string;
+  // epoch millis of when the failure occurred, for display alongside the sample.
+  errorTime?: number;
 }
+
+// a single captured error: its underlying message and when it was first seen.
+export interface ErrorSample {
+  // epoch millis of when this error occurred (undefined if not supplied).
+  at?: number;
+  // the underlying error message (url | status | message).
+  message: string;
+}
+
+/** Coerces a stored error sample to the current object shape. Reports persisted
+ * before timestamps were added hold plain message strings; normalize those to a
+ * timestamp-less { message } so consumers can treat all samples uniformly. */
+export const normalizeErrorSample = (sample: string | ErrorSample): ErrorSample =>
+  typeof sample === 'string' ? { message: sample } : sample;
 
 // accumulates the failure context seen for a single reason code.
 interface FailureDetailAccumulator {
   // number of affected facilities per http status (key is the status, e.g. '500').
   // transport errors (timeout, DNS) have no http status and contribute no entry.
   statusBreakdown: Record<string, number>;
-  // a capped, de-duplicated list of underlying error messages.
-  samples: string[];
+  // a capped, de-duplicated (by message) list of underlying errors with timestamps.
+  samples: ErrorSample[];
 }
 
 export class ReportMetric {
@@ -67,7 +83,7 @@ export class ReportMetric {
     if (!detail) {
       return;
     }
-    const { httpStatus, errorSample } = detail;
+    const { httpStatus, errorSample, errorTime } = detail;
     if (httpStatus !== undefined) {
       const statusKey = `${httpStatus}`;
       accumulator.statusBreakdown[statusKey] =
@@ -76,9 +92,9 @@ export class ReportMetric {
     if (
       errorSample &&
       accumulator.samples.length < MAX_ERROR_SAMPLES &&
-      !accumulator.samples.includes(errorSample)
+      !accumulator.samples.some((sample) => sample.message === errorSample)
     ) {
-      accumulator.samples.push(errorSample);
+      accumulator.samples.push({ at: errorTime, message: errorSample });
     }
   }
 
@@ -94,7 +110,7 @@ export class ReportMetric {
       total: number;
       description: string;
       statusBreakdown?: Record<string, number>;
-      samples?: string[];
+      samples?: ErrorSample[];
     } = {
       total,
       description: ResultCodingsDescriptions[code] as string

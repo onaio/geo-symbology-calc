@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { range } from 'lodash-es';
-	import { formatTriggerDuration, parseForTable } from './utils';
+	import { formatTimestamp, formatTriggerDuration, parseForTable } from './utils';
+	import { normalizeErrorSample, type ErrorSample } from '@onaio/symbology-calc-core';
 	import PageHeader from '$lib/shared/components/PageHeader.svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from '@zerodevx/svelte-toast';
@@ -61,8 +62,9 @@
 		description: string;
 		// http status -> affected facility count, present only for network failures.
 		statusBreakdown?: Record<string, number>;
-		// sample underlying error messages (url | status | message).
-		samples?: string[];
+		// sample underlying errors (url | status | message) with the time each occurred.
+		// legacy reports (before timestamps) persisted these as plain strings.
+		samples?: (string | ErrorSample)[];
 	};
 
 	// TODO - below section DRY out these functions.
@@ -279,7 +281,12 @@
 													{#if row[1].samples}
 														<ul class="mb-0 small text-muted">
 															{#each row[1].samples as sample}
-																<li>{sample}</li>
+																{@const normalized = normalizeErrorSample(sample)}
+																<li>
+																	{#if normalized.at}<span class="fw-bold"
+																			>{formatTimestamp(normalized.at)}</span
+																		> &mdash; {/if}{normalized.message}
+																</li>
 															{/each}
 														</ul>
 													{/if}
@@ -325,7 +332,12 @@
 													{#if row[1].samples}
 														<ul class="mb-0 small text-muted">
 															{#each row[1].samples as sample}
-																<li>{sample}</li>
+																{@const normalized = normalizeErrorSample(sample)}
+																<li>
+																	{#if normalized.at}<span class="fw-bold"
+																			>{formatTimestamp(normalized.at)}</span
+																		> &mdash; {/if}{normalized.message}
+																</li>
 															{/each}
 														</ul>
 													{/if}
